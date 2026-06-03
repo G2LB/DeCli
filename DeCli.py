@@ -34,8 +34,15 @@ NERD_GLYPH_GITHUB = "\uea84"  # nf-dev-github_badge
 
 def load_config(path):
     global BASE, REKENINGHOUDER, IBAN, CATEGORIE_MAPPEN, STATE_FILE, OUT_DIR
-    with open(path, "r", encoding="utf-8-sig") as f:
-        cfg = yaml.safe_load(f)
+    for enc in ("utf-8-sig", "utf-16"):
+        try:
+            with open(path, "r", encoding=enc) as f:
+                cfg = yaml.safe_load(f)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        raise UnicodeDecodeError(f"Kan {path} niet lezen (geen UTF-8 of UTF-16)")
     BASE = cfg["base"]
     REKENINGHOUDER = cfg["rekeninghouder"]
     IBAN = cfg["iban"]
