@@ -1,0 +1,35 @@
+# Configuratie (persoonlijke gegevens)
+config.yaml
+
+# Output
+declaratie_overzichten/
+*.zip
+
+# Bonnetjes / Syncthing
+bonnetjes/
+
+# Data directories (bevatten bankafschriften met persoonlijke data)
+eten/
+reizen/
+accomodaties/
+overig/
+PBMs-overig/
+_voorbeeld/
+TeDeclareren/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+uv.lock
+.python-version
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Loose files in root (pdf, eml, msg, lock)
+*.pdf
+*.eml
+*.msg
+*.#
