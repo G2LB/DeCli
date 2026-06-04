@@ -930,7 +930,7 @@ def main():
     arg_project = ""
     arg_client = ""
     arg_weken = None
-    arg_maps = None
+    arg_xcat = None
     arg_auto = False
     arg_inbox = None
     arg_move = False
@@ -962,7 +962,7 @@ def main():
         elif args[i] == "--weken" and i + 1 < len(args):
             arg_weken = args[i + 1].split()
             i += 2
-        elif args[i] == "--map" and i + 1 < len(args):
+        elif args[i] == "--xcat" and i + 1 < len(args):
             raw_maps = args[i + 1].split()
             beschikbaar = list(CATEGORIE_MAPPEN.keys())
             skip = []
@@ -971,7 +971,7 @@ def main():
                     skip.append(int(m))
                 else:
                     skip.extend(i + 1 for i, k in enumerate(beschikbaar) if k.startswith(m))
-            arg_maps = [k for i, k in enumerate(beschikbaar, 1) if i not in set(skip)]
+            arg_xcat = [k for i, k in enumerate(beschikbaar, 1) if i not in set(skip)]
             i += 2
         elif args[i] == "--auto":
             arg_auto = True
@@ -1010,7 +1010,7 @@ def main():
         print("    --project <naam>    Projectnaam")
         print("    --client <naam>     Opdrachtgever")
         print("    --weken <nrs>       Weeknummers (bijv. 20 21)")
-        print("    --map <mappen>      Categorieen om uit te sluiten (nummers of namen, bijv. 1 4)")
+        print("    --xcat <nummers>    Categorieen om uit te sluiten (nummers, bijv. 1 4)")
         print("    --auto              Auto-classificatie o.b.v. transactiegegevens")
         print("    --inbox <pad>       Scan een aparte map met PDFs, classificeer auto")
         print("    --move              Verplaats bestanden uit inbox (ipv kopiëren)")
@@ -1109,7 +1109,7 @@ def main():
     print()
 
     # Mapfilter bepalen (index-based uitsluiten)
-    maps_te_verwerken = arg_maps
+    maps_te_verwerken = arg_xcat
     if maps_te_verwerken is None and not arg_inbox:
         beschikbare_maps = [n for n, p in CATEGORIE_MAPPEN.items() if os.path.isdir(p)]
         print("  Mappen:")
