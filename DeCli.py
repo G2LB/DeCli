@@ -430,6 +430,7 @@ def df(page, pn, subtitle=""):
 def dwh(page, label, y):
     page.draw_rect((M, y - 10, W - M, y + 16), color=CL, fill=CL)
     page.insert_text((M + 10, y + 5), label, fontsize=12, color=CA, fontname="Helvetica-Bold")
+    return y + 26
 
 def dtb(page, t, y):
     if y > H - M - 120:
@@ -469,37 +470,53 @@ def dwt(page, txs, y):
     page.insert_text((W - M - 80, y + 5), f"EUR {total:.2f}", fontsize=10, color=(0.0, 0.4, 0.0), fontname="Helvetica-Bold")
     return y + 25
 
-def generate_category_pdf(category_name, transactions, output_path, project, client, show_qr=True):
+def generate_category_pdf(category_name, transactions, output_path, project, client, show_qr=True, sort_week=False):
     doc = fitz.open()
     page = doc.new_page()
     page_num = 1
     dh(page, project, short_cat_name(category_name))
     y = M + 65
 
-    sorted_txs = sorted(transactions, key=lambda t: t["date_obj"] or datetime.min)
-    gt = sum(parse_amount(t["amount"]) for t in sorted_txs)
+    gt = sum(parse_amount(t["amount"]) for t in transactions)
 
-    tx_count = 0
-    for t in sorted_txs:
-        if tx_count >= 6:
-            df(page, page_num, short_cat_name(category_name))
-            page = doc.new_page()
-            page_num += 1
-            dh(page, project, short_cat_name(category_name))
-            y = M + 65
-            tx_count = 0
+    def new_page():
+        nonlocal page, page_num, y, tx_count
+        df(page, page_num, short_cat_name(category_name))
+        page = doc.new_page()
+        page_num += 1
+        dh(page, project, short_cat_name(category_name))
+        y = M + 65
+        tx_count = 0
+
+    def draw_tx(t):
+        nonlocal y, tx_count
         ny = dtb(page, t, y)
         if ny:
             y = ny
             tx_count += 1
         else:
-            df(page, page_num, short_cat_name(category_name))
-            page = doc.new_page()
-            page_num += 1
-            dh(page, project, short_cat_name(category_name))
-            y = M + 65
+            new_page()
             y = dtb(page, t, y) or (y + 20)
             tx_count = 1
+
+    tx_count = 0
+    if sort_week:
+        weeks = group_by_week(transactions)
+        for wk_label, wk_txs in weeks.items():
+            if y > H - M - 160:
+                new_page()
+            y = dwh(page, f"Week {wk_label}", y)
+            for t in wk_txs:
+                if tx_count >= 6:
+                    new_page()
+                draw_tx(t)
+            y = dwt(page, wk_txs, y)
+    else:
+        sorted_txs = sorted(transactions, key=lambda t: t["date_obj"] or datetime.min)
+        for t in sorted_txs:
+            if tx_count >= 6:
+                new_page()
+            draw_tx(t)
 
     y += 15
     page.draw_rect((M, y - 5, W - M, y + 18), color=CA, fill=CA)
@@ -615,7 +632,7 @@ def draw_frontpage_matrix(page, project, client, all_categories, grand_total, sc
     page.draw_line((M + 15, y), (W - M - 15, y), color=CA)
     return row_info, y
 
-def generate_combined_pdf(all_categories, output_path, project, client, show_qr=True, tree_text="", script_name="", cli_command="", show_cmd=True):
+def generate_combined_pdf(all_categories, output_path, project, client, show_qr=True, tree_text="", script_name="", cli_command="", show_cmd=True, sort_week=False):
     doc = fitz.open()
     grand_total = sum(parse_amount(t["amount"]) for _, txs in all_categories for t in txs)
 
@@ -645,7 +662,6 @@ def generate_combined_pdf(all_categories, output_path, project, client, show_qr=
     cat_start_pages = {}
     for cat_idx, (cat_name, transactions) in enumerate(all_categories):
         cat_total = sum(parse_amount(t["amount"]) for t in transactions)
-        sorted_txs = sorted(transactions, key=lambda t: t["date_obj"] or datetime.min)
         section_label = f"{cat_idx + 1}. {short_cat_name(cat_name)}"
 
         cat_start_pages[cat_name] = len(doc) + 1
@@ -653,25 +669,44 @@ def generate_combined_pdf(all_categories, output_path, project, client, show_qr=
         page = doc.new_page()
         dh(page, project, section_label)
         y = M + 65
-        tx_count = 0
-        for t in sorted_txs:
-            if tx_count >= 6:
-                df(page, len(doc), section_label)
-                page = doc.new_page()
-                dh(page, project, section_label)
-                y = M + 65
-                tx_count = 0
+
+        def combined_new_page():
+            nonlocal page, y, tx_count
+            df(page, len(doc), section_label)
+            page = doc.new_page()
+            dh(page, project, section_label)
+            y = M + 65
+            tx_count = 0
+
+        def combined_draw_tx(t):
+            nonlocal y, tx_count
             ny = dtb(page, t, y)
             if ny:
                 y = ny
                 tx_count += 1
             else:
-                df(page, len(doc), section_label)
-                page = doc.new_page()
-                dh(page, project, section_label)
-                y = M + 65
+                combined_new_page()
                 y = dtb(page, t, y) or (y + 20)
                 tx_count = 1
+
+        tx_count = 0
+        if sort_week:
+            weeks = group_by_week(transactions)
+            for wk_label, wk_txs in weeks.items():
+                if y > H - M - 160:
+                    combined_new_page()
+                y = dwh(page, f"Week {wk_label}", y)
+                for t in wk_txs:
+                    if tx_count >= 6:
+                        combined_new_page()
+                    combined_draw_tx(t)
+                y = dwt(page, wk_txs, y)
+        else:
+            sorted_txs = sorted(transactions, key=lambda t: t["date_obj"] or datetime.min)
+            for t in sorted_txs:
+                if tx_count >= 6:
+                    combined_new_page()
+                combined_draw_tx(t)
 
         y += 8
         page.draw_rect((M, y - 5, W - M, y + 15), color=(0.9, 0.92, 0.95), fill=(0.9, 0.92, 0.95))
@@ -905,11 +940,15 @@ def main():
     arg_no_qr = False
     arg_pdf_to_front = False
     arg_no_cmd = False
+    arg_sort_week = False
 
     i = 0
     while i < len(args):
         if args[i] == "--no-cmd":
             arg_no_cmd = True
+            i += 1
+        elif args[i] == "--sort-week":
+            arg_sort_week = True
             i += 1
         elif args[i] == "--config" and i + 1 < len(args):
             arg_config = args[i + 1]
@@ -979,6 +1018,7 @@ def main():
         print("    --qr <bedrag>       Genereer QR code PNG voor een bedrag (bv. 112.55)")
         print("    --no-qr             Geen QR codes in PDFs")
         print("    --pdf-to-front      Kopieer gecombineerde PDF naar werkmap")
+        print("    --sort-week         Groepeer transacties per week met week-headers")
         print("    --no-cmd            Verberg CLI-commando in PDF")
         print("    --reset             Wis verwerkingstracking")
         print("    --help, -h          Dit overzicht")
@@ -1176,7 +1216,7 @@ def main():
             txs = per_cat[cat_name]
             print(f"=== {cat_name} ({len(txs)} transacties) ===")
             output = os.path.join(OUT_DIR, f"Declaratie_{cat_name}_{project}_{timestamp}.pdf")
-            generate_category_pdf(cat_name, txs, output, project, client, show_qr=not arg_no_qr)
+            generate_category_pdf(cat_name, txs, output, project, client, show_qr=not arg_no_qr, sort_week=arg_sort_week)
             pdf_files.append(output)
             all_categories.append((cat_name, txs))
 
@@ -1203,7 +1243,7 @@ def main():
                 print(f"    [{tag}] {t['merchant'][:35]:35s} {t['amount']:>8s}")
 
             output = os.path.join(OUT_DIR, f"Declaratie_{cat_name}_{project}_{timestamp}.pdf")
-            generate_category_pdf(cat_name, txs, output, project, client, show_qr=not arg_no_qr)
+            generate_category_pdf(cat_name, txs, output, project, client, show_qr=not arg_no_qr, sort_week=arg_sort_week)
             pdf_files.append(output)
             all_categories.append((cat_name, txs))
 
@@ -1254,7 +1294,7 @@ def main():
 
     # Gecombineerde PDF
     combined_output = os.path.join(OUT_DIR, f"Declaratie_gecombineerd_{project}_{timestamp}.pdf")
-    generate_combined_pdf(all_categories, combined_output, project, client, show_qr=not arg_no_qr, tree_text=tree_text, script_name=os.path.basename(__file__), cli_command=cli_command, show_cmd=not arg_no_cmd)
+    generate_combined_pdf(all_categories, combined_output, project, client, show_qr=not arg_no_qr, tree_text=tree_text, script_name=os.path.basename(__file__), cli_command=cli_command, show_cmd=not arg_no_cmd, sort_week=arg_sort_week)
     pdf_files.append(combined_output)
 
     # Zip — tree opnieuw opbouwen met combined PDF erbij
