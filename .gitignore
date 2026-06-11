@@ -8,6 +8,9 @@ declaratie_overzichten/
 # Bonnetjes / Syncthing
 bonnetjes/
 
+# Fonts (gedownload via setup.py fonts)
+fonts/
+
 # Data directories (bevatten bankafschriften met persoonlijke data)
 eten/
 reizen/

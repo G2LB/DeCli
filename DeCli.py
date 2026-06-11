@@ -67,19 +67,20 @@ FONTS_CLASSIC = {
 TINOS_KEYS = {"body_file", "bold_file", "italic_file", "body_name"}
 
 def resolve_tinos_fonts():
-    """Zoek Tinos font files in de fonts/ map naast het script.
-    Valt terug op Times-Roman als Tinos niet beschikbaar is."""
-    reg = os.path.join(TINOS_FONT_DIR, "Tinos-Regular.ttf")
-    bold = os.path.join(TINOS_FONT_DIR, "Tinos-Bold.ttf")
-    italic = os.path.join(TINOS_FONT_DIR, "Tinos-Italic.ttf")
+    """Zoek Tinos Nerd Font in fonts/ naast het script.
+    Valt terug op Times-Roman als font niet beschikbaar is."""
+    reg = os.path.join(TINOS_FONT_DIR, "TinosNerdFont-Regular.ttf")
+    bold = os.path.join(TINOS_FONT_DIR, "TinosNerdFont-Bold.ttf")
+    italic = os.path.join(TINOS_FONT_DIR, "TinosNerdFont-Italic.ttf")
     if os.path.exists(reg) and os.path.exists(bold) and os.path.exists(italic):
         return {
             "body_file": reg,
             "bold_file": bold,
             "italic_file": italic,
-            "body": "Tinos",
-            "bold": "Tinos-Bold",
-            "italic": "Tinos-Italic",
+            "body": "TinosNerdFont",
+            "bold": "TinosNerdFont-Bold",
+            "italic": "TinosNerdFont-Italic",
+            "nerd_file": reg,
         }
     return None
 
@@ -447,14 +448,25 @@ def check_onverwerkt(week_filter=None):
 
 # ----- PDF generation -----
 
-def register_custom_fonts(doc, fonts):
-    """Registreer Tinos custom fonts in het document als ze bestaan."""
-    if fonts.get("body_file") and os.path.exists(fonts["body_file"]):
-        doc.add_font(fontname=fonts["body"], fontfile=fonts["body_file"])
-    if fonts.get("bold_file") and os.path.exists(fonts["bold_file"]):
-        doc.add_font(fontname=fonts["bold"], fontfile=fonts["bold_file"])
-    if fonts.get("italic_file") and os.path.exists(fonts["italic_file"]):
-        doc.add_font(fontname=fonts["italic"], fontfile=fonts["italic_file"])
+def fi(fonts, style):
+    """Geef kwargs dict voor insert_text: fontname (en fontfile indien beschikbaar)."""
+    fn = fonts.get(style, "Helvetica")
+    ff = fonts.get(style + "_file")
+    if ff and os.path.exists(ff):
+        return {"fontname": fn, "fontfile": ff}
+    return {"fontname": fn}
+
+_FALLBACK_BUILTIN = {
+    "TinosNerdFont": "Times-Roman",
+    "TinosNerdFont-Bold": "Times-Bold",
+    "TinosNerdFont-Italic": "Times-Italic",
+    "TinosNerdFont-BoldItalic": "Times-BoldItalic",
+}
+
+def gtl(text, fonts, style, fontsize):
+    """Wrapper voor fitz.get_text_length — gebruikt built-in fallback voor custom fonts."""
+    fn = _FALLBACK_BUILTIN.get(fonts.get(style, ""), fonts.get(style, "Helvetica"))
+    return fitz.get_text_length(text, fontname=fn, fontsize=fontsize)
 
 W, H, M = 595, 842, 50
 CD = (0.15, 0.15, 0.25)
@@ -478,64 +490,66 @@ def wrap_text_lines(text, max_chars=80):
 
 def dh(page, project, cat_label, fonts=FONTS_MODERN):
     page.draw_rect((M, M, W - M, M + 35), color=CA, fill=CA)
-    page.insert_text((M + 15, M + 24), "Declaraties", fontsize=10, color=(1, 1, 1), fontname=fonts["bold"])
-    cw = fitz.get_text_length(project, fontname=fonts["bold"], fontsize=10)
-    page.insert_text(((W - cw) / 2, M + 24), project, fontsize=10, color=(1, 1, 1), fontname=fonts["bold"])
-    rw = fitz.get_text_length(cat_label, fontname=fonts["bold"], fontsize=10)
-    page.insert_text((W - M - 15 - rw, M + 24), cat_label, fontsize=10, color=(1, 1, 1), fontname=fonts["bold"])
+    page.insert_text((M + 15, M + 24), "Declaraties", fontsize=10, color=(1, 1, 1), **fi(fonts, "bold"))
+    cw = gtl(project, fonts, "bold", 10)
+    page.insert_text(((W - cw) / 2, M + 24), project, fontsize=10, color=(1, 1, 1), **fi(fonts, "bold"))
+    rw = gtl(cat_label, fonts, "bold", 10)
+    page.insert_text((W - M - 15 - rw, M + 24), cat_label, fontsize=10, color=(1, 1, 1), **fi(fonts, "bold"))
 
 def df(page, pn, subtitle="", fonts=FONTS_MODERN):
     page.draw_rect((M, H - M - 20, W - M, H - M), color=CL, fill=CL)
     left = f"Pagina {pn}"
     if subtitle:
         left += f" - {subtitle}"
-    page.insert_text((M + 10, H - M - 6), left, fontsize=8, color=(0.5, 0.5, 0.5), fontname=fonts["body"])
+    page.insert_text((M + 10, H - M - 6), left, fontsize=8, color=(0.5, 0.5, 0.5), **fi(fonts, "body"))
     nw = datetime.now().strftime("%d-%m-%Y %H:%M")
-    page.insert_text((W - M - 80, H - M - 6), nw, fontsize=8, color=(0.5, 0.5, 0.5), fontname=fonts["body"])
+    page.insert_text((W - M - 80, H - M - 6), nw, fontsize=8, color=(0.5, 0.5, 0.5), **fi(fonts, "body"))
 
 def dwh(page, label, y, fonts=FONTS_MODERN):
-    nf = os.path.exists(NERD_FONT_PATH)
+    nerd_file = fonts.get("nerd_file", NERD_FONT_PATH)
+    nf = os.path.exists(nerd_file)
     icon_w = 0
     icon_x = M + 10
     if nf:
-        page.insert_text((icon_x, y + 5), NERD_GLYPH_CALENDAR, fontsize=10, color=CA, fontfile=NERD_FONT_PATH)
+        page.insert_text((icon_x, y + 5), NERD_GLYPH_CALENDAR, fontsize=10, color=CA, fontfile=nerd_file)
         icon_w = 14
-    page.insert_text((icon_x + icon_w, y + 5), label, fontsize=12, color=CA, fontname=fonts["bold"])
+    page.insert_text((icon_x + icon_w, y + 5), label, fontsize=12, color=CA, **fi(fonts, "bold"))
     return y + 26
 
 def dtb(page, t, y, fonts=FONTS_MODERN):
     if y > H - M - 120:
         return False
-    nf = os.path.exists(NERD_FONT_PATH)
+    nerd_file = fonts.get("nerd_file", NERD_FONT_PATH)
+    nf = os.path.exists(nerd_file)
     mer_lines = wrap_text_lines(t["merchant"], max_chars=60)
     for i, mer_line in enumerate(mer_lines):
-        page.insert_text((M + 15, y), mer_line, fontsize=10, color=CD, fontname=fonts["bold"])
+        page.insert_text((M + 15, y), mer_line, fontsize=10, color=CD, **fi(fonts, "bold"))
         if i == 0:
-            page.insert_text((W - M - 80, y), f"- {t['amount']}", fontsize=10, color=(0.6, 0.0, 0.0), fontname=fonts["bold"])
+            page.insert_text((W - M - 80, y), f"- {t['amount']}", fontsize=10, color=(0.6, 0.0, 0.0), **fi(fonts, "bold"))
         y += 16
     y += 2
     if t["is_bank"]:
         icon = NERD_GLYPH_BANK if nf else ""
         if nf:
-            page.insert_text((M + 15, y), icon, fontsize=8, color=(0.5, 0.5, 0.5), fontfile=NERD_FONT_PATH)
-        page.insert_text((M + 15 + (14 if nf else 0), y), "AF", fontsize=8, color=(0.5, 0.5, 0.5), fontname=fonts["body"])
+            page.insert_text((M + 15, y), icon, fontsize=8, color=(0.5, 0.5, 0.5), fontfile=nerd_file)
+        page.insert_text((M + 15 + (14 if nf else 0), y), "AF", fontsize=8, color=(0.5, 0.5, 0.5), **fi(fonts, "body"))
     else:
         icon = NERD_GLYPH_CASH if nf else ""
         if nf:
-            page.insert_text((M + 15, y), icon, fontsize=8, color=(0.6, 0.4, 0.0), fontfile=NERD_FONT_PATH)
-        page.insert_text((M + 15 + (14 if nf else 0), y), "Contant/Anders", fontsize=8, color=(0.6, 0.4, 0.0), fontname=fonts["bold"])
+            page.insert_text((M + 15, y), icon, fontsize=8, color=(0.6, 0.4, 0.0), fontfile=nerd_file)
+        page.insert_text((M + 15 + (14 if nf else 0), y), "Contant/Anders", fontsize=8, color=(0.6, 0.4, 0.0), **fi(fonts, "bold"))
     y += 14
     if t["omschrijving"]:
         lbl = "Omschrijving" if t["is_bank"] else "Opmerking"
         oms_lines = wrap_text_lines(f"{lbl}: {t['omschrijving']}")
         for oms_line in oms_lines:
-            page.insert_text((M + 15, y), oms_line, fontsize=8, color=(0.3, 0.3, 0.3), fontname=fonts["body"])
+            page.insert_text((M + 15, y), oms_line, fontsize=8, color=(0.3, 0.3, 0.3), **fi(fonts, "body"))
             y += 12
     if t["rentedatum"]:
-        page.insert_text((M + 15, y), f"Rentedatum: {t['rentedatum']}", fontsize=8, color=(0.3, 0.3, 0.3), fontname=fonts["body"])
-        page.insert_text((M + 200, y), f"Verwerkingsdatum: {t['verwerkingsdatum']}", fontsize=8, color=(0.3, 0.3, 0.3), fontname=fonts["body"])
+        page.insert_text((M + 15, y), f"Rentedatum: {t['rentedatum']}", fontsize=8, color=(0.3, 0.3, 0.3), **fi(fonts, "body"))
+        page.insert_text((M + 200, y), f"Verwerkingsdatum: {t['verwerkingsdatum']}", fontsize=8, color=(0.3, 0.3, 0.3), **fi(fonts, "body"))
     else:
-        page.insert_text((M + 15, y), "Geen banktransactie", fontsize=8, color=(0.5, 0.5, 0.5), fontname=fonts["italic"])
+        page.insert_text((M + 15, y), "Geen banktransactie", fontsize=8, color=(0.5, 0.5, 0.5), **fi(fonts, "italic"))
     y += 10
     page.draw_line((M + 5, y), (W - M - 5, y), color=(0.85, 0.85, 0.85))
     return y + 20
@@ -544,18 +558,18 @@ def dwt(page, txs, y, fonts=FONTS_MODERN):
     total = sum(parse_amount(t["amount"]) for t in txs)
     y += 5
     page.draw_rect((M, y - 5, W - M, y + 15), color=(0.95, 0.95, 0.95), fill=(0.95, 0.95, 0.95))
-    nf = os.path.exists(NERD_FONT_PATH)
+    nerd_file = fonts.get("nerd_file", NERD_FONT_PATH)
+    nf = os.path.exists(nerd_file)
     icon_w = 0
     if nf:
-        page.insert_text((M + 10, y + 5), NERD_GLYPH_EURO, fontsize=10, color=CD, fontfile=NERD_FONT_PATH)
+        page.insert_text((M + 10, y + 5), NERD_GLYPH_EURO, fontsize=10, color=CD, fontfile=nerd_file)
         icon_w = 14
-    page.insert_text((M + 10 + icon_w, y + 5), "Week totaal:", fontsize=10, color=CD, fontname=fonts["bold"])
-    page.insert_text((W - M - 80, y + 5), f"EUR {total:.2f}", fontsize=10, color=(0.0, 0.4, 0.0), fontname=fonts["bold"])
+    page.insert_text((M + 10 + icon_w, y + 5), "Week totaal:", fontsize=10, color=CD, **fi(fonts, "bold"))
+    page.insert_text((W - M - 80, y + 5), f"EUR {total:.2f}", fontsize=10, color=(0.0, 0.4, 0.0), **fi(fonts, "bold"))
     return y + 25
 
 def generate_category_pdf(category_name, transactions, output_path, project, client, show_qr=True, sort_week=False, fonts=FONTS_MODERN):
     doc = fitz.open()
-    register_custom_fonts(doc, fonts)
     page = doc.new_page()
     page_num = 1
     dh(page, project, short_cat_name(category_name), fonts)
@@ -604,23 +618,24 @@ def generate_category_pdf(category_name, transactions, output_path, project, cli
 
     y += 15
     page.draw_rect((M, y - 5, W - M, y + 18), color=CA, fill=CA)
-    nf = os.path.exists(NERD_FONT_PATH)
+    nerd_file = fonts.get("nerd_file", NERD_FONT_PATH)
+    nf = os.path.exists(nerd_file)
     icon_w = 0
     if nf:
-        page.insert_text((M + 10, y + 6), NERD_GLYPH_EURO, fontsize=11, color=(1, 1, 1), fontfile=NERD_FONT_PATH)
+        page.insert_text((M + 10, y + 6), NERD_GLYPH_EURO, fontsize=11, color=(1, 1, 1), fontfile=nerd_file)
         icon_w = 14
-    page.insert_text((M + 10 + icon_w, y + 6), "EINDTOTAAL", fontsize=11, color=(1, 1, 1), fontname=fonts["bold"])
-    page.insert_text((W - M - 80, y + 6), f"EUR {gt:.2f}", fontsize=11, color=(1, 1, 1), fontname=fonts["bold"])
+    page.insert_text((M + 10 + icon_w, y + 6), "EINDTOTAAL", fontsize=11, color=(1, 1, 1), **fi(fonts, "bold"))
+    page.insert_text((W - M - 80, y + 6), f"EUR {gt:.2f}", fontsize=11, color=(1, 1, 1), **fi(fonts, "bold"))
     y += 30
 
-    page.insert_text((M + 10, y), f"Project: {project}", fontsize=9, color=CD, fontname=fonts["bold"])
+    page.insert_text((M + 10, y), f"Project: {project}", fontsize=9, color=CD, **fi(fonts, "bold"))
     y += 14
-    page.insert_text((M + 10, y), f"Opdrachtgever: {client}", fontsize=9, color=CD, fontname=fonts["bold"])
+    page.insert_text((M + 10, y), f"Opdrachtgever: {client}", fontsize=9, color=CD, **fi(fonts, "bold"))
     y += 14
     if os.path.exists(STATE_FILE):
         st = lees_state()
         if st.get("last_run"):
-            page.insert_text((M + 10, y), f"Eerder gegenereerd: {st['last_run']}", fontsize=8, color=(0.5, 0.5, 0.5), fontname=fonts["body"])
+            page.insert_text((M + 10, y), f"Eerder gegenereerd: {st['last_run']}", fontsize=8, color=(0.5, 0.5, 0.5), **fi(fonts, "body"))
 
     y += 10
     if show_qr:
@@ -636,8 +651,8 @@ def generate_category_pdf(category_name, transactions, output_path, project, cli
             f"t.n.v.: {REKENINGHOUDER}",
         ]
         for i, line in enumerate(info_lines):
-            page.insert_text((info_x, y + i * 14), line, fontsize=8, color=CD, fontname=fonts["body"])
-        page.insert_text((W - M - 85, y + 85), "Scan met bank app", fontsize=8, color=(0.5, 0.5, 0.5), fontname=fonts["body"])
+            page.insert_text((info_x, y + i * 14), line, fontsize=8, color=CD, **fi(fonts, "body"))
+        page.insert_text((W - M - 85, y + 85), "Scan met bank app", fontsize=8, color=(0.5, 0.5, 0.5), **fi(fonts, "body"))
 
     df(page, page_num, fonts=fonts)
 
@@ -651,30 +666,31 @@ def generate_category_pdf(category_name, transactions, output_path, project, cli
 
 def draw_frontpage_matrix(page, project, client, all_categories, grand_total, script_name, cli_command="", show_cmd=True, fonts=FONTS_MODERN):
     dh(page, project, "Voorpagina", fonts)
-    nf = os.path.exists(NERD_FONT_PATH)
+    nerd_file = fonts.get("nerd_file", NERD_FONT_PATH)
+    nf = os.path.exists(nerd_file)
     y = M + 65
-    page.insert_text((M + 15, y), "Declaratie Overzicht", fontsize=18, color=CA, fontname=fonts["bold"])
+    page.insert_text((M + 15, y), "Declaratie Overzicht", fontsize=18, color=CA, **fi(fonts, "bold"))
     y += 35
     page.draw_line((M + 15, y), (W - M - 15, y), color=CA)
     y += 20
-    page.insert_text((M + 15, y), f"Project: {project}", fontsize=11, color=CD, fontname=fonts["bold"])
+    page.insert_text((M + 15, y), f"Project: {project}", fontsize=11, color=CD, **fi(fonts, "bold"))
     y += 18
-    page.insert_text((M + 15, y), f"Opdrachtgever: {client}", fontsize=11, color=CD, fontname=fonts["bold"])
+    page.insert_text((M + 15, y), f"Opdrachtgever: {client}", fontsize=11, color=CD, **fi(fonts, "bold"))
     y += 18
-    page.insert_text((M + 15, y), f"Declarant: {REKENINGHOUDER}", fontsize=11, color=CD, fontname=fonts["bold"])
+    page.insert_text((M + 15, y), f"Declarant: {REKENINGHOUDER}", fontsize=11, color=CD, **fi(fonts, "bold"))
     y += 18
     base_x = M + 15
     gegenereerd = f"Gegenereerd: {datetime.now().strftime('%d-%m-%Y %H:%M')} met "
-    gw = fitz.get_text_length(gegenereerd, fontname=fonts["body"], fontsize=9)
-    page.insert_text((base_x, y), gegenereerd, fontsize=9, color=(0.5, 0.5, 0.5), fontname=fonts["body"])
+    gw = gtl(gegenereerd, fonts, "body", 9)
+    page.insert_text((base_x, y), gegenereerd, fontsize=9, color=(0.5, 0.5, 0.5), **fi(fonts, "body"))
     icon_w = 0
     if nf:
-        page.insert_text((base_x + gw, y), NERD_GLYPH_GITHUB, fontsize=9, fontfile=NERD_FONT_PATH)
+        page.insert_text((base_x + gw, y), NERD_GLYPH_GITHUB, fontsize=9, fontfile=nerd_file)
         icon_w = 10
     link_label = "DeCli"
     lx = base_x + gw + icon_w
-    lw = fitz.get_text_length(link_label, fontname=fonts["body"], fontsize=9)
-    page.insert_text((lx, y), link_label, fontsize=9, color=CA, fontname=fonts["body"])
+    lw = gtl(link_label, fonts, "body", 9)
+    page.insert_text((lx, y), link_label, fontsize=9, color=CA, **fi(fonts, "body"))
     page.insert_link({
         "kind": fitz.LINK_URI,
         "from": fitz.Rect(lx, y - 10, lx + lw, y + 4),
@@ -682,20 +698,20 @@ def draw_frontpage_matrix(page, project, client, all_categories, grand_total, sc
     })
     y += 20
     if show_cmd and cli_command:
-        page.insert_text((M + 15, y), cli_command, fontsize=8, color=(0.5, 0.5, 0.5), fontname=fonts["mono"])
+        page.insert_text((M + 15, y), cli_command, fontsize=8, color=(0.5, 0.5, 0.5), **fi(fonts, "mono"))
         y += 16
     y += 10
     page.draw_line((M + 15, y), (W - M - 15, y), color=CA)
     y += 10
-    page.insert_text((M + 15, y), "Overzicht declaraties per categorie:", fontsize=10, color=CA, fontname=fonts["bold"])
+    page.insert_text((M + 15, y), "Overzicht declaraties per categorie:", fontsize=10, color=CA, **fi(fonts, "bold"))
     y += 5
     page.draw_line((M + 15, y), (W - M - 15, y), color=CL)
     y += 8
-    page.insert_text((M + 15, y), "Sectie", fontsize=9, color=CA, fontname=fonts["bold"])
-    page.insert_text((M + 70, y), "Categorie", fontsize=9, color=CA, fontname=fonts["bold"])
-    page.insert_text((M + 230, y), "Aantal", fontsize=9, color=CA, fontname=fonts["bold"])
-    page.insert_text((M + 295, y), "Bedrag", fontsize=9, color=CA, fontname=fonts["bold"])
-    page.insert_text((M + 430, y), "Pagina", fontsize=9, color=CA, fontname=fonts["bold"])
+    page.insert_text((M + 15, y), "Sectie", fontsize=9, color=CA, **fi(fonts, "bold"))
+    page.insert_text((M + 70, y), "Categorie", fontsize=9, color=CA, **fi(fonts, "bold"))
+    page.insert_text((M + 230, y), "Aantal", fontsize=9, color=CA, **fi(fonts, "bold"))
+    page.insert_text((M + 295, y), "Bedrag", fontsize=9, color=CA, **fi(fonts, "bold"))
+    page.insert_text((M + 430, y), "Pagina", fontsize=9, color=CA, **fi(fonts, "bold"))
     y += 5
     page.draw_line((M + 15, y), (W - M - 15, y), color=CL)
     y += 8
@@ -705,21 +721,21 @@ def draw_frontpage_matrix(page, project, client, all_categories, grand_total, sc
         by = y
         icon_x = M + 15
         if nf:
-            page.insert_text((icon_x, y), NERD_GLYPH_TAG, fontsize=10, color=CD, fontfile=NERD_FONT_PATH)
+            page.insert_text((icon_x, y), NERD_GLYPH_TAG, fontsize=10, color=CD, fontfile=nerd_file)
             icon_x += 14
-        page.insert_text((icon_x, y), str(i + 1), fontsize=10, color=CD, fontname=fonts["body"])
-        page.insert_text((M + 70, y), short_cat_name(cat_name), fontsize=10, color=CD, fontname=fonts["body"])
-        page.insert_text((M + 230, y), str(len(txs)), fontsize=10, color=CD, fontname=fonts["body"])
-        page.insert_text((M + 295, y), f"EUR {cat_total:.2f}".replace(".", ","), fontsize=10, color=(0.0, 0.4, 0.0), fontname=fonts["bold"])
+        page.insert_text((icon_x, y), str(i + 1), fontsize=10, color=CD, **fi(fonts, "body"))
+        page.insert_text((M + 70, y), short_cat_name(cat_name), fontsize=10, color=CD, **fi(fonts, "body"))
+        page.insert_text((M + 230, y), str(len(txs)), fontsize=10, color=CD, **fi(fonts, "body"))
+        page.insert_text((M + 295, y), f"EUR {cat_total:.2f}".replace(".", ","), fontsize=10, color=(0.0, 0.4, 0.0), **fi(fonts, "bold"))
         row_info.append((cat_name, by))
         y += 16
     page.draw_line((M + 15, y), (W - M - 15, y), color=CL)
     y += 8
     n_total = sum(len(txs) for _, txs in all_categories)
     by_total = y + 4
-    page.insert_text((M + 70, y), "Totaal", fontsize=10, color=CA, fontname=fonts["bold"])
-    page.insert_text((M + 230, y), str(n_total), fontsize=10, color=CA, fontname=fonts["bold"])
-    page.insert_text((M + 295, y), f"EUR {grand_total:.2f}".replace(".", ","), fontsize=10, color=CA, fontname=fonts["bold"])
+    page.insert_text((M + 70, y), "Totaal", fontsize=10, color=CA, **fi(fonts, "bold"))
+    page.insert_text((M + 230, y), str(n_total), fontsize=10, color=CA, **fi(fonts, "bold"))
+    page.insert_text((M + 295, y), f"EUR {grand_total:.2f}".replace(".", ","), fontsize=10, color=CA, **fi(fonts, "bold"))
     row_info.append(("EINDTOTAAL", by_total))
     y += 5
     page.draw_line((M + 15, y), (W - M - 15, y), color=CA)
@@ -727,8 +743,8 @@ def draw_frontpage_matrix(page, project, client, all_categories, grand_total, sc
 
 def generate_combined_pdf(all_categories, output_path, project, client, show_qr=True, tree_text="", script_name="", cli_command="", show_cmd=True, sort_week=False, fonts=FONTS_MODERN):
     doc = fitz.open()
-    register_custom_fonts(doc, fonts)
-    nf = os.path.exists(NERD_FONT_PATH)
+    nerd_file = fonts.get("nerd_file", NERD_FONT_PATH)
+    nf = os.path.exists(nerd_file)
     grand_total = sum(parse_amount(t["amount"]) for _, txs in all_categories for t in txs)
 
     # ===== PASS 1: Create all pages =====
@@ -741,7 +757,7 @@ def generate_combined_pdf(all_categories, output_path, project, client, show_qr=
         y = y_after + 15
         page.draw_line((M + 15, y), (W - M - 15, y), color=CL)
         y += 10
-        page.insert_text((M + 15, y), "Bronbestanden:", fontsize=10, color=CA, fontname=fonts["bold"])
+        page.insert_text((M + 15, y), "Bronbestanden:", fontsize=10, color=CA, **fi(fonts, "bold"))
         y += 20
         for line in tree_text.split("\n"):
             if y > H - M - 30:
@@ -749,7 +765,7 @@ def generate_combined_pdf(all_categories, output_path, project, client, show_qr=
                 page = doc.new_page()
                 dh(page, project, "Voorpagina", fonts)
                 y = M + 20
-            page.insert_text((M + 15, y), line, fontsize=7, color=(0.2, 0.2, 0.2), fontname=fonts["mono"])
+            page.insert_text((M + 15, y), line, fontsize=7, color=(0.2, 0.2, 0.2), **fi(fonts, "mono"))
             y += 10
     df(page, len(doc), "Voorpagina", fonts)
 
@@ -807,12 +823,12 @@ def generate_combined_pdf(all_categories, output_path, project, client, show_qr=
         page.draw_rect((M, y - 5, W - M, y + 15), color=(0.9, 0.92, 0.95), fill=(0.9, 0.92, 0.95))
         icon_x = M + 10
         if nf:
-            page.insert_text((icon_x, y + 5), NERD_GLYPH_TAG, fontsize=10, color=CD, fontfile=NERD_FONT_PATH)
+            page.insert_text((icon_x, y + 5), NERD_GLYPH_TAG, fontsize=10, color=CD, fontfile=nerd_file)
             icon_x += 14
-        page.insert_text((icon_x, y + 5), f"Subtotaal {short_cat_name(cat_name)}:", fontsize=10, color=CD, fontname=fonts["bold"])
+        page.insert_text((icon_x, y + 5), f"Subtotaal {short_cat_name(cat_name)}:", fontsize=10, color=CD, **fi(fonts, "bold"))
         amt_text = f"EUR {cat_total:.2f}"
-        aw = fitz.get_text_length(amt_text, fontname=fonts["bold"], fontsize=10)
-        page.insert_text((W - M - 15 - aw, y + 5), amt_text, fontsize=10, color=CD, fontname=fonts["bold"])
+        aw = gtl(amt_text, fonts, "bold", 10)
+        page.insert_text((W - M - 15 - aw, y + 5), amt_text, fontsize=10, color=CD, **fi(fonts, "bold"))
         y += 25
 
         if show_qr:
@@ -828,8 +844,8 @@ def generate_combined_pdf(all_categories, output_path, project, client, show_qr=
                 f"t.n.v.: {REKENINGHOUDER}",
             ]
             for i, line in enumerate(info_lines):
-                page.insert_text((info_x, y + i * 14), line, fontsize=8, color=CD, fontname=fonts["body"])
-            page.insert_text((W - M - 85, y + 85), "Scan met bank app", fontsize=8, color=(0.5, 0.5, 0.5), fontname=fonts["body"])
+                page.insert_text((info_x, y + i * 14), line, fontsize=8, color=CD, **fi(fonts, "body"))
+            page.insert_text((W - M - 85, y + 85), "Scan met bank app", fontsize=8, color=(0.5, 0.5, 0.5), **fi(fonts, "body"))
 
         df(page, len(doc), section_label, fonts)
 
@@ -839,30 +855,30 @@ def generate_combined_pdf(all_categories, output_path, project, client, show_qr=
     page = doc.new_page()
     dh(page, project, "TOTAAL", fonts)
     y = M + 65
-    page.insert_text((M + 20, y), "EINDTOTAAL ALLE CATEGORIEEN", fontsize=14, color=CA, fontname=fonts["bold"])
+    page.insert_text((M + 20, y), "EINDTOTAAL ALLE CATEGORIEEN", fontsize=14, color=CA, **fi(fonts, "bold"))
     y += 100
     page.draw_line((M + 20, y), (W - M - 20, y), color=CA)
     y += 40
-    page.insert_text((W - M - 100, y), f"EUR {grand_total:.2f}", fontsize=16, color=(0.0, 0.4, 0.0), fontname=fonts["bold"])
+    page.insert_text((W - M - 100, y), f"EUR {grand_total:.2f}", fontsize=16, color=(0.0, 0.4, 0.0), **fi(fonts, "bold"))
     y += 120
     page.draw_line((M + 20, y), (W - M - 20, y), color=CA)
     y += 40
-    page.insert_text((M + 20, y), f"Project: {project}", fontsize=10, color=CD, fontname=fonts["bold"])
+    page.insert_text((M + 20, y), f"Project: {project}", fontsize=10, color=CD, **fi(fonts, "bold"))
     y += 25
-    page.insert_text((M + 20, y), f"Opdrachtgever: {client}", fontsize=10, color=CD, fontname=fonts["bold"])
+    page.insert_text((M + 20, y), f"Opdrachtgever: {client}", fontsize=10, color=CD, **fi(fonts, "bold"))
     y += 16
     base_x = M + 20
     gegenereerd = f"Gegenereerd: {datetime.now().strftime('%d-%m-%Y %H:%M')} met "
-    gw_t = fitz.get_text_length(gegenereerd, fontname=fonts["body"], fontsize=9)
-    page.insert_text((base_x, y), gegenereerd, fontsize=9, color=(0.5, 0.5, 0.5), fontname=fonts["body"])
+    gw_t = gtl(gegenereerd, fonts, "body", 9)
+    page.insert_text((base_x, y), gegenereerd, fontsize=9, color=(0.5, 0.5, 0.5), **fi(fonts, "body"))
     icon_w = 0
     if nf:
-        page.insert_text((base_x + gw_t, y), NERD_GLYPH_GITHUB, fontsize=9, fontfile=NERD_FONT_PATH)
+        page.insert_text((base_x + gw_t, y), NERD_GLYPH_GITHUB, fontsize=9, fontfile=nerd_file)
         icon_w = 10
     link_label = "DeCli"
     lx = base_x + gw_t + icon_w
-    lw = fitz.get_text_length(link_label, fontname=fonts["body"], fontsize=9)
-    page.insert_text((lx, y), link_label, fontsize=9, color=CA, fontname=fonts["body"])
+    lw = gtl(link_label, fonts, "body", 9)
+    page.insert_text((lx, y), link_label, fontsize=9, color=CA, **fi(fonts, "body"))
     page.insert_link({
         "kind": fitz.LINK_URI,
         "from": fitz.Rect(lx, y - 10, lx + lw, y + 4),
@@ -870,7 +886,7 @@ def generate_combined_pdf(all_categories, output_path, project, client, show_qr=
     })
     y += 18
     if show_cmd and cli_command:
-        page.insert_text((M + 20, y), cli_command, fontsize=8, color=(0.5, 0.5, 0.5), fontname=fonts["mono"])
+        page.insert_text((M + 20, y), cli_command, fontsize=8, color=(0.5, 0.5, 0.5), **fi(fonts, "mono"))
     df(page, len(doc), fonts=fonts)
 
     # ===== PASS 2: Add page numbers -X- underlined + links =====
@@ -881,9 +897,9 @@ def generate_combined_pdf(all_categories, output_path, project, client, show_qr=
         if cat_name in all_keys:
             sp = page_map[cat_name]
             pg_text = f"-{sp}-"
-            pw = fitz.get_text_length(pg_text, fontname=fonts["body"], fontsize=10)
+            pw = gtl(pg_text, fonts, "body", 10)
             px = M + 430
-            fp.insert_text((px, by), pg_text, fontsize=10, color=CD, fontname=fonts["body"])
+            fp.insert_text((px, by), pg_text, fontsize=10, color=CD, **fi(fonts, "body"))
             fp.draw_line((px, by + 2), (px + pw, by + 2), color=CD)
             fp.insert_link({
                 "kind": fitz.LINK_GOTO,
