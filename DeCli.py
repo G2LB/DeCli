@@ -484,6 +484,21 @@ def filter_by_month(txs, month):
         return txs
     return [t for t in txs if t["date_obj"] is None or t["date_obj"].month == month]
 
+def parse_cat_spec(raw, beschikbaar):
+    """Parse --cat/--xcat waarden: nummers, ranges (1-3), naam-prefixen, komma/spatie gescheiden."""
+    result = set()
+    parts = [p for p in re.split(r'[,\s]+', raw) if p]
+    for part in parts:
+        range_m = re.match(r'^(\d+)\s*-\s*(\d+)$', part)
+        if range_m:
+            start, end = int(range_m.group(1)), int(range_m.group(2))
+            result.update(range(start, end + 1))
+        elif part.isdigit():
+            result.add(int(part))
+        else:
+            result.update(i + 1 for i, k in enumerate(beschikbaar, 1) if k.startswith(part))
+    return result
+
 def check_onverwerkt(week_filter=None):
     state = lees_state()
     processed = set(state.get("processed_refs", []))
@@ -1097,7 +1112,8 @@ def main():
     arg_project = ""
     arg_client = ""
     arg_weken = None
-    arg_xcat = None
+    arg_cat_raw = None
+    arg_xcat_raw = None
     arg_auto = False
     arg_inbox = None
     arg_move = False
@@ -1132,16 +1148,11 @@ def main():
         elif args[i] == "--weken" and i + 1 < len(args):
             arg_weken = args[i + 1].split()
             i += 2
+        elif args[i] == "--cat" and i + 1 < len(args):
+            arg_cat_raw = args[i + 1]
+            i += 2
         elif args[i] == "--xcat" and i + 1 < len(args):
-            raw_maps = args[i + 1].split()
-            beschikbaar = list(CATEGORIE_MAPPEN.keys())
-            skip = []
-            for m in raw_maps:
-                if m.isdigit():
-                    skip.append(int(m))
-                else:
-                    skip.extend(i + 1 for i, k in enumerate(beschikbaar) if k.startswith(m))
-            arg_xcat = [k for i, k in enumerate(beschikbaar, 1) if i not in set(skip)]
+            arg_xcat_raw = args[i + 1]
             i += 2
         elif args[i] == "--auto":
             arg_auto = True
@@ -1195,6 +1206,20 @@ def main():
     else:
         fonts = {**FONTS_MODERN}
 
+    # Verwerk --cat en --xcat (ná load_config zodat CATEGORIE_MAPPEN bekend is)
+    beschikbaar = list(CATEGORIE_MAPPEN.keys())
+    if arg_cat_raw is not None:
+        include = parse_cat_spec(arg_cat_raw, beschikbaar)
+        maps_te_verwerken = [k for i, k in enumerate(beschikbaar, 1) if i in include]
+        if arg_xcat_raw is not None:
+            exclude = parse_cat_spec(arg_xcat_raw, beschikbaar)
+            maps_te_verwerken = [k for i, k in enumerate(beschikbaar, 1) if i not in exclude and k in maps_te_verwerken]
+    elif arg_xcat_raw is not None:
+        exclude = parse_cat_spec(arg_xcat_raw, beschikbaar)
+        maps_te_verwerken = [k for i, k in enumerate(beschikbaar, 1) if i not in exclude]
+    else:
+        maps_te_verwerken = None
+
     if show_help:
         print("  Gebruik: py DeCli.py [opties]")
         print()
@@ -1203,7 +1228,8 @@ def main():
         print("    --project <naam>    Projectnaam")
         print("    --client <naam>     Opdrachtgever")
         print("    --weken <nrs>       Weeknummers (bijv. 20 21)")
-        print("    --xcat <nummers>    Categorieen om uit te sluiten (nummers, bijv. 1 4)")
+        print("    --cat <spec>        Categorieen om mee te nemen (nummers, bijv. 1,3 of 1-3)")
+        print("    --xcat <spec>       Categorieen om uit te sluiten (nummers, bijv. 1,4 of 1-3)")
         print("    --auto              Auto-classificatie o.b.v. transactiegegevens")
         print("    --inbox <pad>       Scan een aparte map met PDFs, classificeer auto")
         print("    --move              Verplaats bestanden uit inbox (ipv kopiëren)")
@@ -1314,17 +1340,16 @@ def main():
     print()
 
     # Mapfilter bepalen (index-based uitsluiten)
-    maps_te_verwerken = arg_xcat
     if maps_te_verwerken is None and not arg_inbox:
         beschikbare_maps = [n for n, p in CATEGORIE_MAPPEN.items() if os.path.isdir(p)]
         print("  Mappen:")
         for i, m in enumerate(beschikbare_maps, 1):
             print(f"    {i}. {m}")
         try:
-            map_inp = input(f"  Niet meenemen (nummers, bijv. 1 3, of leeg = alles): ").strip()
+            map_inp = input(f"  Niet meenemen (nummers, bijv. 1,3 of 1-3, of leeg = alles): ").strip()
             if map_inp:
-                skip = [int(x) for x in map_inp.split() if x.isdigit()]
-                maps_te_verwerken = [m for i, m in enumerate(beschikbare_maps, 1) if i not in skip]
+                exclude = parse_cat_spec(map_inp, beschikbare_maps)
+                maps_te_verwerken = [m for i, m in enumerate(beschikbare_maps, 1) if i not in exclude]
         except (EOFError, OSError):
             maps_te_verwerken = None
 
