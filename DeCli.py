@@ -30,6 +30,7 @@ CATEGORIE_MAPPEN = {}
 STATE_FILE = ""
 OUT_DIR = ""
 REPO_URL = "https://github.com/G2LB/DeCli/"
+BIC_LOOKUP = {}  # wordt aangevuld uit config, daarna met defaults
 NERD_FONT_PATH = os.path.join(os.path.expanduser("~"), "AppData", "Local", "Microsoft", "Windows", "Fonts", "JetBrainsMonoNerdFont-Regular.ttf")
 NERD_GLYPH_GITHUB = "\uea84"  # nf-dev-github_badge
 NERD_GLYPH_FOLDER = "\uf07c"   # nf-fa-folder
@@ -86,7 +87,7 @@ def resolve_tinos_fonts():
     return None
 
 def load_config(path):
-    global BASE, SRC, REKENINGHOUDER, IBAN, CATEGORIE_MAPPEN, STATE_FILE, OUT_DIR
+    global BASE, SRC, REKENINGHOUDER, IBAN, CATEGORIE_MAPPEN, STATE_FILE, OUT_DIR, BIC_LOOKUP
     for enc in ("utf-8-sig", "utf-16"):
         try:
             with open(path, "r", encoding=enc) as f:
@@ -103,6 +104,23 @@ def load_config(path):
     CATEGORIE_MAPPEN = {k: os.path.join(BASE, v) for k, v in cfg["categorie_mappen"].items()}
     STATE_FILE = os.path.join(BASE, "declaratie_overzichten", ".state.json")
     OUT_DIR = os.path.join(BASE, "declaratie_overzichten")
+
+    # BIC lookup: config overrides defaults
+    user_bic = cfg.get("bic_lookup", {})
+    defaults = {
+        "RABO": "RABONL2U",
+        "INGB": "INGBNL2A",
+        "ABNA": "ABNANL2A",
+        "SNSB": "SNSBNL2A",
+        "KNAB": "KNABNL2H",
+        "BUNQ": "BUNQNL2A",
+        "ASNB": "ASNBNL2A",
+        "TRIO": "TRIONL2U",
+        "REVO": "REVOLT21",
+        "N26": "NTSBDEB1",
+    }
+    defaults.update(user_bic)
+    BIC_LOOKUP = defaults
 
 month_map = {
     "januari": 1, "februari": 2, "maart": 3, "april": 4,
@@ -254,14 +272,15 @@ def short_cat_name(cat_name):
     parts = cat_name.split("-", 1)
     return parts[1].capitalize() if len(parts) > 1 else cat_name.capitalize()
 
-def gen_qr_png(iban, holder, amount_eur, description, bic=""):
-    # EPC QR code (SCT / Girocode) in veldvolgorde die bankapps verwachten.
-    # Regels: service tag, versie, charset, identificatie, BIC, naam, IBAN,
-    # bedrag, purpose, ongestructureerde omschrijving, gestructureerde referentie.
+def gen_qr_png(iban, holder, amount_eur, description, bic=None):
     bare_iban = re.sub(r"\s+", "", iban).upper()
     holder = (holder or "").strip()[:70]
     description = (description or "").strip()[:140]
-    bic = (bic or "").strip().upper()[:11]
+    if not bic:
+        # Zoek BIC op basis van IBAN-prefix (bankidentificatie)
+        prefix = re.sub(r"\d", "", bare_iban[:8]).lstrip("NL")
+        bic = BIC_LOOKUP.get(prefix, "")
+    bic = bic.strip().upper()[:11]
     bedrag = f"EUR{amount_eur:.2f}"
     qr_data = "\r\n".join([
         "BCD",
