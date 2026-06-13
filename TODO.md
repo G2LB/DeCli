@@ -62,12 +62,13 @@ Optioneel: genereer een extra overzicht met BTW-bedragen per categorie/maand. Ha
 
 ## Done
 
-### --src flag + tilde expansie + hash-based duplicate check
-**Commit:** `f9220c8`
+### --src flag + tilde expansie + hash-based duplicate check + --force-dec
+**Commits:** `f9220c8`, `8379b72`
 
 - `--src <pad>` overschrijft `src` uit config voor `--inbox` / `--auto`
 - `~` wordt geëxpandeerd naar thuismap op alle pad-argumenten
 - **Hash-based duplicate check**: bij `--inbox` wordt van elke PDF in de categorie-mappen een MD5-hash berekend. Nieuwe PDFs in de inbox worden ook gehasht en vergeleken. Bij een match → `[DUP]` + overslaan. Zo voorkom je dat dezelfde bankafschrift per ongeluk opnieuw wordt verwerkt, ook als de bestandsnaam anders is.
+- `--force-dec`: testmodus die state-check overslaat, bij lege cat/xcat-filter alle beschikbare categorieën verwerkt, en de state niet bijwerkt. PDF + ZIP + tabel worden wel gegenereerd.
 
 ### BIC lookup via IBAN voor QR-code
 **Commit:** `56a3276`
