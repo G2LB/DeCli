@@ -145,6 +145,81 @@ declaraties/
   --help, -h          Dit overzicht
 ```
 
+## Voorbeelden
+
+### `nb.txt` — handmatige uitgaven per categorie
+
+Plaats dit bestand in een categorie-map (bijv. `overig/nb.txt`) of in de `base`-map.
+Met headers verdeel je transacties over categorieën in één bestand.
+
+```txt
+# DUMMY VOORBEELD — vervang door eigen uitgaven
+# ! = koppel bonnetje aan bovenstaande transactie
+
+[1. Eten]
+Burger King @ 25-05-2026 EUR 12.50
+Lunch @ 26-05-2026 EUR 8.50
+!bonnetjes/lunch_kassabon.jpg
+
+[4. Overig]
+Kantoorartikelen @ 27-05-2026 EUR 34.99
+!bonnetjes/kantoor_btw.jpg
+
+[2. Reizen]
+NS retour @ 28-05-2026 EUR 24.80
+```
+
+> Zonder header wordt de map-categorie gebruikt (backwards compatible).
+
+### Gegenereerde declaratie (ASCII-tabel)
+
+Na het draaien van `py DeCli.py --project "Project X" --client "Opdrachtgever"`:
+
+```
+Declaratie Overzicht - Project X
+========================================================================================
+
+1-ETEN
+----------------------------------------------------------------------------------------
+  Week 21
+----------------------------------------------------------------------------------------
+  25-05-2026  Burger King                                  EUR 12,50  [C]
+  '--         Week totaal:                                  EUR 12,50
+  26-05-2026  Lunch                                         EUR  8,50  [C]
+  '--         Week totaal:                                  EUR  8,50
+----------------------------------------------------------------------------------------
+  Totaal 1-eten: EUR 21,00
+----------------------------------------------------------------------------------------
+
+2-REIZEN
+----------------------------------------------------------------------------------------
+  Week 21
+----------------------------------------------------------------------------------------
+  28-05-2026  NS retour                                     EUR 24,80  [C]
+  '--         Week totaal:                                  EUR 24,80
+----------------------------------------------------------------------------------------
+  Totaal 2-reizen: EUR 24,80
+----------------------------------------------------------------------------------------
+
+4-OVERIG
+----------------------------------------------------------------------------------------
+  Week 21
+----------------------------------------------------------------------------------------
+  27-05-2026  Kantoorartikelen                              EUR 34,99  [C]
+  '--         Week totaal:                                  EUR 34,99
+----------------------------------------------------------------------------------------
+  Totaal 4-overig: EUR 34,99
+----------------------------------------------------------------------------------------
+
+========================================================================================
+EINDTOTAAL: EUR 80,79
+========================================================================================
+Project: Project X
+Opdrachtgever: Opdrachtgever
+Gegenereerd: 13-06-2026 19:29
+Repository: https://github.com/G2LB/DeCli/
+```
+
 ## Licentie
 
-MIT -- zie `LICENSE`
+MIT — zie `LICENSE`

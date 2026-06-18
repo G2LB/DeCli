@@ -31,6 +31,9 @@ uv.lock
 Thumbs.db
 .DS_Store
 
+# nb.txt — voorbeeld in README.md, niet als los bestand
+nb.txt
+
 # Loose files in root (pdf, eml, msg, lock)
 *.pdf
 *.eml
