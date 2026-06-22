@@ -594,6 +594,32 @@ def gtl(text, fonts, style, fontsize):
     fn = _FALLBACK_BUILTIN.get(fonts.get(style, ""), fonts.get(style, "Helvetica"))
     return fitz.get_text_length(text, fontname=fn, fontsize=fontsize)
 
+_NERD_FONT_CACHE = {}
+
+def _nerd_font(path):
+    """Cache fitz.Font per pad (None als het pad ontbreekt of niet laadt)."""
+    if path not in _NERD_FONT_CACHE:
+        try:
+            _NERD_FONT_CACHE[path] = fitz.Font(fontfile=path) if path and os.path.exists(path) else None
+        except Exception:
+            _NERD_FONT_CACHE[path] = None
+    return _NERD_FONT_CACHE[path]
+
+def draw_glyph(page, point, glyph, fontsize, nerd_file, color=(0, 0, 0)):
+    """Teken één Nerd Font-glyph via TextWriter.
+
+    page.insert_text(fontfile=...) rendert voor PUA/MDI-codepoints een leeg
+    .notdef-blokje; fitz.Font + TextWriter tekent de glyph wél correct.
+    Geeft True als er daadwerkelijk getekend is.
+    """
+    font = _nerd_font(nerd_file)
+    if not font or not glyph or not font.has_glyph(ord(glyph[0])):
+        return False
+    tw = fitz.TextWriter(page.rect)
+    tw.append(point, glyph, font=font, fontsize=fontsize)
+    tw.write_text(page, color=color)
+    return True
+
 W, H, M = 595, 842, 50
 CD = (0.15, 0.15, 0.25)
 CA = (0.0, 0.3, 0.6)
@@ -637,7 +663,7 @@ def dwh(page, label, y, fonts=FONTS_MODERN):
     icon_w = 0
     icon_x = M + 10
     if nf:
-        page.insert_text((icon_x, y + 5), NERD_GLYPH_CALENDAR, fontsize=10, color=CA, fontfile=nerd_file)
+        draw_glyph(page, (icon_x, y + 5), NERD_GLYPH_CALENDAR, 10, nerd_file, color=CA)
         icon_w = 14
     page.insert_text((icon_x + icon_w, y + 5), label, fontsize=12, color=CA, **fi(fonts, "bold"))
     return y + 26
@@ -657,12 +683,12 @@ def dtb(page, t, y, fonts=FONTS_MODERN):
     if t["is_bank"]:
         icon = NERD_GLYPH_BANK if nf else ""
         if nf:
-            page.insert_text((M + 15, y), icon, fontsize=8, color=(0.5, 0.5, 0.5), fontfile=nerd_file)
+            draw_glyph(page, (M + 15, y), icon, 8, nerd_file, color=(0.5, 0.5, 0.5))
         page.insert_text((M + 15 + (14 if nf else 0), y), "AF", fontsize=8, color=(0.5, 0.5, 0.5), **fi(fonts, "body"))
     else:
         icon = NERD_GLYPH_CASH if nf else ""
         if nf:
-            page.insert_text((M + 15, y), icon, fontsize=8, color=(0.6, 0.4, 0.0), fontfile=nerd_file)
+            draw_glyph(page, (M + 15, y), icon, 8, nerd_file, color=(0.6, 0.4, 0.0))
         page.insert_text((M + 15 + (14 if nf else 0), y), "Contant/Anders", fontsize=8, color=(0.6, 0.4, 0.0), **fi(fonts, "bold"))
     y += 14
     if t["omschrijving"]:
@@ -682,7 +708,7 @@ def dtb(page, t, y, fonts=FONTS_MODERN):
         icon = NERD_GLYPH_LINK_IMG if nf else ""
         ix = M + 15
         if nf:
-            page.insert_text((ix, y), icon, fontsize=8, color=(0.6, 0.4, 0.0), fontfile=nerd_file)
+            draw_glyph(page, (ix, y), icon, 8, nerd_file, color=(0.6, 0.4, 0.0))
             ix += 14
         arc = img.replace("\\", "/")
         label = f"Bonnetje: {arc}"
@@ -705,7 +731,7 @@ def dwt(page, txs, y, fonts=FONTS_MODERN):
     nf = os.path.exists(nerd_file)
     icon_w = 0
     if nf:
-        page.insert_text((M + 10, y + 5), NERD_GLYPH_EURO, fontsize=10, color=CD, fontfile=nerd_file)
+        draw_glyph(page, (M + 10, y + 5), NERD_GLYPH_EURO, 10, nerd_file, color=CD)
         icon_w = 14
     page.insert_text((M + 10 + icon_w, y + 5), "Week totaal:", fontsize=10, color=CD, **fi(fonts, "bold"))
     page.insert_text((W - M - 80, y + 5), f"EUR {total:.2f}", fontsize=10, color=(0.0, 0.4, 0.0), **fi(fonts, "bold"))
@@ -765,7 +791,7 @@ def generate_category_pdf(category_name, transactions, output_path, project, cli
     nf = os.path.exists(nerd_file)
     icon_w = 0
     if nf:
-        page.insert_text((M + 10, y + 6), NERD_GLYPH_EURO, fontsize=11, color=(1, 1, 1), fontfile=nerd_file)
+        draw_glyph(page, (M + 10, y + 6), NERD_GLYPH_EURO, 11, nerd_file, color=(1, 1, 1))
         icon_w = 14
     page.insert_text((M + 10 + icon_w, y + 6), "EINDTOTAAL", fontsize=11, color=(1, 1, 1), **fi(fonts, "bold"))
     page.insert_text((W - M - 80, y + 6), f"EUR {gt:.2f}", fontsize=11, color=(1, 1, 1), **fi(fonts, "bold"))
@@ -828,7 +854,7 @@ def draw_frontpage_matrix(page, project, client, all_categories, grand_total, sc
     page.insert_text((base_x, y), gegenereerd, fontsize=9, color=(0.5, 0.5, 0.5), **fi(fonts, "body"))
     icon_w = 0
     if nf:
-        page.insert_text((base_x + gw, y), NERD_GLYPH_GITHUB, fontsize=9, fontfile=nerd_file)
+        draw_glyph(page, (base_x + gw, y), NERD_GLYPH_GITHUB, 9, nerd_file)
         icon_w = 10
     link_label = "DeCli"
     lx = base_x + gw + icon_w
@@ -864,7 +890,7 @@ def draw_frontpage_matrix(page, project, client, all_categories, grand_total, sc
         by = y
         icon_x = M + 15
         if nf:
-            page.insert_text((icon_x, y), NERD_GLYPH_TAG, fontsize=10, color=CD, fontfile=nerd_file)
+            draw_glyph(page, (icon_x, y), NERD_GLYPH_TAG, 10, nerd_file, color=CD)
             icon_x += 14
         page.insert_text((icon_x, y), str(i + 1), fontsize=10, color=CD, **fi(fonts, "body"))
         page.insert_text((M + 70, y), short_cat_name(cat_name), fontsize=10, color=CD, **fi(fonts, "body"))
@@ -966,7 +992,7 @@ def generate_combined_pdf(all_categories, output_path, project, client, show_qr=
         page.draw_rect((M, y - 5, W - M, y + 15), color=(0.9, 0.92, 0.95), fill=(0.9, 0.92, 0.95))
         icon_x = M + 10
         if nf:
-            page.insert_text((icon_x, y + 5), NERD_GLYPH_TAG, fontsize=10, color=CD, fontfile=nerd_file)
+            draw_glyph(page, (icon_x, y + 5), NERD_GLYPH_TAG, 10, nerd_file, color=CD)
             icon_x += 14
         page.insert_text((icon_x, y + 5), f"Subtotaal {short_cat_name(cat_name)}:", fontsize=10, color=CD, **fi(fonts, "bold"))
         amt_text = f"EUR {cat_total:.2f}"
@@ -1016,7 +1042,7 @@ def generate_combined_pdf(all_categories, output_path, project, client, show_qr=
     page.insert_text((base_x, y), gegenereerd, fontsize=9, color=(0.5, 0.5, 0.5), **fi(fonts, "body"))
     icon_w = 0
     if nf:
-        page.insert_text((base_x + gw_t, y), NERD_GLYPH_GITHUB, fontsize=9, fontfile=nerd_file)
+        draw_glyph(page, (base_x + gw_t, y), NERD_GLYPH_GITHUB, 9, nerd_file)
         icon_w = 10
     link_label = "DeCli"
     lx = base_x + gw_t + icon_w
