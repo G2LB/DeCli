@@ -39,6 +39,9 @@ Thumbs.db
 # nb.txt — voorbeeld in README.md, niet als los bestand
 nb.txt
 
+# Test scratch previews
+test/_*.png
+
 # Loose files in root (pdf, eml, msg, lock)
 *.pdf
 *.eml
