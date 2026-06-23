@@ -76,10 +76,10 @@ def main(out_path):
     page.draw_line((M, 90), (595 - M, 90), color=ACC, width=1.2)
 
     # kolomposities
-    x_const, x_sym, x_class, x_code, x_esc = M, 196, 226, 392, 470
+    x_nr, x_const, x_sym, x_class, x_code, x_esc = M, M + 26, 196, 226, 392, 470
     # kolomkoppen
     yh = 108
-    for x, h in ((x_const, "Constante"), (x_sym, "Sym"), (x_class, "Class"),
+    for x, h in ((x_nr, "#"), (x_const, "Constante"), (x_sym, "Sym"), (x_class, "Class"),
                  (x_code, "Codepoint"), (x_esc, "Python-escape")):
         page.insert_text((x, yh), h, fontsize=8, fontname=SERIF_B, color=MUT)
     page.draw_line((M, yh + 5), (595 - M, yh + 5), color=MUT, width=0.6)
@@ -91,6 +91,7 @@ def main(out_path):
         if i % 2 == 1:  # zebra
             page.draw_rect(fitz.Rect(M - 4, y - 13, 595 - M + 4, y + rh - 14),
                            color=None, fill=(0.96, 0.96, 0.97))
+        page.insert_text((x_nr, y), str(i + 1), fontsize=8.5, fontname=SERIF_B, color=MUT)
         page.insert_text((x_const, y), name, fontsize=8.5, fontname=SERIF, color=INK)
         page.insert_text((x_const, y + 10), label, fontsize=7, fontname=SERIF_I, color=MUT)
         # glyph in nerd font (via TextWriter — insert_text geeft .notdef)
